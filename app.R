@@ -25,7 +25,7 @@ query_table = readRDS("./data/query_table.rds") %>% dplyr::select(query, `Number
 pub_type = readRDS("./data/pub_type.rds")
 year_choice = sort(unique(parsed_tm$year))
 diseases = read.delim("./data/diseases_list.txt", encoding = "UTF-8")
-tm.view = arrow::read_parquet("./data/pubmed_abstracts_mined_text2.parquet") 
+tm.view = fst::read.fst("./data/pubmed_abstracts_mined_text2.fst") 
 tm.view$pmid = as.character(tm.view$pmid)
 tm.view$year = as.character(tm.view$year)
 genes_tm = arrow::read_parquet("./data/gene2pmids.parquet")
