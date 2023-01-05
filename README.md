@@ -5,4 +5,4 @@ Pubmed articles were first queried with MeSH (Medical Subject Headings) terms re
 
 The Docker image is available [here](https://hub.docker.com/repository/docker/dwill023/tm-app).
 
-The app is hosted [here](https://willdesi.shinyapps.io/Text_Mining_App/).
+The app is hosted [here](https://willdesi.shinyapps.io/Text_Mining/).
