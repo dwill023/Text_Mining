@@ -20,16 +20,18 @@ library(paletteer)
 ### The name of the file within app dependencies is always the name of the variable loaded
 
 total_number_of_PMIDs = readRDS("./data/total_number_PMIDs_per_disease.rds") %>% as.data.frame() # total_number_of_PMIDs per disease indication
-parsed_tm = readRDS("./data/full_parsed_data.rds") # publications parsed by diseases
-query_table = readRDS("./data/query_table.rds") %>% dplyr::select(query, `Number of Publications`)
-pub_type = readRDS("./data/pub_type.rds")
-year_choice = sort(unique(parsed_tm$year))
-diseases = read.delim("./data/diseases_list.txt", encoding = "UTF-8")
-tm.view = fst::read.fst("./data/pubmed_abstracts_mined_text2.fst") 
+tm.view = readRDS("./data/pubmed_abstracts_mined_text2.rds")
 tm.view$pmid = as.character(tm.view$pmid)
 tm.view$year = as.character(tm.view$year)
-genes_tm = arrow::read_parquet("./data/gene2pmids.parquet")
 tm = tm.view %>% dplyr::select(pmid, year, title, abstract) %>% dplyr::distinct() # the metadata for the pmids (year, title & abstract)
+parsed_tm = readRDS("./data/full_parsed_data.rds") # publications parsed by diseases
+query_table = readRDS("./data/query_table.rds")
+pub_type = readRDS("./data/pub_type.rds")
+year_choice = sort(unique(parsed_tm$year))
+diseases = parsed_tm %>% dplyr::distinct(diseases) %>% arrange(diseases)
+genes_tm = arrow::read_parquet("./data/gene2pmids.parquet")
+
+query_list = sort(query_table$query)
 
 # create a theme for the app
 mytheme <- create_theme(
@@ -65,16 +67,7 @@ mytheme <- create_theme(
 # to add color to the spinner 
 options(spinner.color="#246479")
 
-# the wrap_in() function
-wrap_in <- function(.df, column, word, tag){
-  class<-""
-  if(grepl("\\.", tag)) {
-    class <- sub(".+?\\.(.+)", " class='\\1'", tag)
-    tag <- sub("\\..+", "", tag)
-  }
-  .df[[column]] <-  gsub(sprintf("(%s)", paste0(word, collapse="|")), sprintf("<%1$s%2$s>\\1</%1$s>", tag, class), .df[[column]], ignore.case = T)
-  .df
-}
+
 
 
 # UI SIDE ####
@@ -139,7 +132,7 @@ body <- dashboardBody(
               box(width = 12, title = "", collapsible = TRUE, collapsed = FALSE, status = "success", solidHeader = TRUE,
                   fluidRow(
                     column(4,
-                           pickerInput(inputId = "query_picker", label = "Select Query(s)", choices = query_table$query, multiple = TRUE, options = list(`actions-box` = TRUE))),
+                           pickerInput(inputId = "query_picker", label = "Select Query(s)", choices = query_list, multiple = TRUE, options = list(`actions-box` = TRUE))),
                     column(4,
                            actionBttn(inputId = "plot_bar", label = "Plot", style = "unite", color = "royal"))),
                   br(),
@@ -152,7 +145,7 @@ body <- dashboardBody(
               box(width = 12, title = "", collapsible = TRUE, collapsed = FALSE, status = "success", solidHeader = TRUE,
                   fluidRow(
                     column(4,
-                           pickerInput(inputId = "pubtype", label = "Select Publication type(s)", choices = sort(pub_type$publicationtype[1:28]), multiple = TRUE, options = list(`actions-box` = TRUE))),
+                           pickerInput(inputId = "pubtype", label = "Select Publication type(s)", choices = sort(pub_type$publicationtype[1:15]), multiple = TRUE, options = list(`actions-box` = TRUE))),
                     column(4, 
                            actionBttn(inputId = "plot_bar2", label = "Plot", style = "unite", color = "royal"))
                           ),
@@ -176,7 +169,7 @@ body <- dashboardBody(
               br(),
               fluidRow(
                 column(4,
-                       pickerInput(inputId = "query_pick", label = "Select Query(s)", choices = query_table$query, options = list(`actions-box` = TRUE), multiple = TRUE))
+                       pickerInput(inputId = "query_pick", label = "Select Query(s)", choices = query_list, options = list(`actions-box` = TRUE), multiple = TRUE))
               ),
               fluidRow(
                 column(3,
@@ -236,7 +229,7 @@ body <- dashboardBody(
               br(),
               fluidRow(
                 column(3,
-                       pickerInput(inputId = "query_pick2", label = "Select Query(ies)", choices = query_table$query, options = list(`actions-box` = TRUE), multiple = TRUE)),
+                       pickerInput(inputId = "query_pick2", label = "Select Query(ies)", choices = query_list, options = list(`actions-box` = TRUE), multiple = TRUE)),
                 column(3, 
                        pickerInput("disease", "Optional parse by disease indication:", choices= "", multiple = TRUE, options = list(style = "btn-warning", `live-search` = TRUE, `actions-box` = TRUE))),
                 column(2,
@@ -299,16 +292,15 @@ server <- function(input, output, session) {
       count(language, sort = TRUE) %>%
       dplyr::mutate(Percentage = scales::percent(n/sum(n), accuracy = 0.1)) %>%
       bind_rows(summarise(., across(where(is.numeric), sum),
-                          across(where(is.character), ~'Total'))) %>%
+                          across(.cols = 1, ~ 'Total'),
+                          across(.cols = 3, ~ '100%'))) %>%
       dplyr::rename("Number of Publications" = "n")
-    language_table[44,3] = '100%'
-    language_table[40,1] = 'NA'
     language_table
   })
   
   output$lang <- renderUI({
     language_table() %>% flextable() %>% colformat_char(na_str = "NA") %>%
-      footnote(i=10, j=1, value = as_paragraph(c("Undetermined")), ref_symbols = "1", part = "body", inline = TRUE) %>%
+      footnote(i=14, j=1, value = as_paragraph(c("Undetermined")), ref_symbols = "1", part = "body", inline = TRUE) %>%
       autofit() %>% htmltools_value()
   })
   
@@ -478,6 +470,17 @@ server <- function(input, output, session) {
   output$plot1 <- renderPlotly({
     textminingplot()
   })
+  
+  # the wrap_in() function
+  wrap_in <- function(.df, column, word, tag){
+    class<-""
+    if(grepl("\\.", tag)) {
+      class <- sub(".+?\\.(.+)", " class='\\1'", tag)
+      tag <- sub("\\..+", "", tag)
+    }
+    .df[[column]] <-  gsub(sprintf("(%s)", paste0(word, collapse="|")), sprintf("<%1$s%2$s>\\1</%1$s>", tag, class), .df[[column]], ignore.case = T)
+    .df
+  }
   
   observeEvent(event_data("plotly_click", source = "pubs"),
                {
@@ -652,7 +655,7 @@ server <- function(input, output, session) {
   observe({
     df = parsed_tm %>% filter(query %in% input$query_pick2) %>% dplyr::distinct(pmid, year, diseases, disease_in_abstract)
     df2 = df %>% count(diseases, disease_in_abstract, sort = T) %>% na.omit() %>% dplyr::filter(n >=3)
-    dList = df2$diseases
+    dList = sort(df2$diseases)
     updatePickerInput(session, "disease", choices = dList)
   })
 
